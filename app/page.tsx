@@ -78,7 +78,7 @@ const Card = ({ children, className, title, icon: Icon, subtitle }: { children: 
   </motion.div>
 );
 
-const StatCard = ({ label, value, unit, icon: Icon, colorClass, trend, trendValue, description }: { label: string, value: string | number, unit?: string, icon: any, colorClass: string, trend?: 'up' | 'down' | 'stable', trendValue?: string, description?: string }) => (
+const StatCard = ({ label, value, unit, icon: Icon, colorClass, trend, trendValue, description, loading }: { label: string, value: string | number, unit?: string, icon: any, colorClass: string, trend?: 'up' | 'down' | 'stable', trendValue?: string, description?: string, loading?: boolean }) => (
   <motion.div 
     whileHover={{ y: -8, scale: 1.02 }}
     className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-xl shadow-slate-200/50 flex flex-col gap-6 relative overflow-hidden group transition-all duration-500"
@@ -90,7 +90,7 @@ const StatCard = ({ label, value, unit, icon: Icon, colorClass, trend, trendValu
       <div className={cn("p-4 rounded-[1.5rem] shadow-lg shadow-current/10", colorClass)}>
         <Icon className="w-6 h-6" />
       </div>
-      {trend && (
+      {trend && !loading && (
         <div className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest", 
           trend === 'up' ? "bg-red-50 text-red-600" : trend === 'down' ? "bg-emerald-50 text-emerald-600" : "bg-slate-50 text-slate-400"
         )}>
@@ -102,8 +102,14 @@ const StatCard = ({ label, value, unit, icon: Icon, colorClass, trend, trendValu
     <div className="relative z-10">
       <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">{label}</p>
       <div className="flex items-baseline gap-1.5">
-        <span className="text-4xl font-display font-black text-slate-900 tracking-tighter">{value}</span>
-        {unit && <span className="text-sm font-black text-slate-400 uppercase tracking-widest">{unit}</span>}
+        {loading ? (
+          <div className="h-10 w-24 bg-slate-100 animate-pulse rounded-lg" />
+        ) : (
+          <>
+            <span className="text-4xl font-display font-black text-slate-900 tracking-tighter">{value}</span>
+            {unit && <span className="text-sm font-black text-slate-400 uppercase tracking-widest">{unit}</span>}
+          </>
+        )}
       </div>
       {description && <p className="text-[10px] font-bold text-slate-400 mt-3 leading-relaxed">{description}</p>}
     </div>
@@ -155,25 +161,111 @@ const RiskGauge = ({ score, status }: { score: number, status: string }) => {
   );
 };
 
-const ActionCard = ({ action }: { action: SimulationResult['recommendedAction'] }) => {
+const ComparisonModule = ({ unplanned, optimized, safeLimit }: { unplanned: SimulationResult, optimized: SimulationResult, safeLimit: number }) => {
+  const metrics = [
+    { label: 'Peak Discharge', unit: 'm³/s', unplanned: unplanned.peakDischarge, optimized: optimized.peakDischarge, better: 'lower' },
+    { label: 'Flood Risk Score', unit: '/100', unplanned: unplanned.floodRiskScore, optimized: optimized.floodRiskScore, better: 'lower' },
+    { label: 'Peak Reservoir Level', unit: '%', unplanned: unplanned.peakLevel, optimized: optimized.peakLevel, better: 'lower' },
+  ];
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+      <div className="bg-slate-50/50 rounded-[2.5rem] p-8 border border-slate-200/60">
+        <div className="flex items-center gap-3 mb-8">
+          <div className="p-2 bg-red-100 rounded-xl"><XCircle className="w-5 h-5 text-red-600" /></div>
+          <h4 className="text-sm font-black uppercase tracking-widest text-slate-800">Manual Protocol (Unplanned)</h4>
+        </div>
+        <div className="space-y-6">
+          {metrics.map((m) => (
+            <div key={m.label} className="flex items-center justify-between">
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{m.label}</span>
+              <span className="text-lg font-display font-black text-slate-700">{m.unplanned.toFixed(1)} {m.unit}</span>
+            </div>
+          ))}
+          <div className="pt-6 border-t border-slate-200">
+            <div className={cn("px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest text-center", 
+              unplanned.status === 'Safe' ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
+            )}>
+              Outcome: {unplanned.status === 'Safe' ? 'Controlled' : 'Critical Breach'}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-blue-600 rounded-[2.5rem] p-8 shadow-2xl shadow-blue-200 relative overflow-hidden">
+        <div className="absolute top-0 right-0 p-12 opacity-10"><Zap className="w-32 h-32 text-white" /></div>
+        <div className="flex items-center gap-3 mb-8 relative z-10">
+          <div className="p-2 bg-white/20 rounded-xl backdrop-blur-md"><ShieldCheck className="w-5 h-5 text-white" /></div>
+          <h4 className="text-sm font-black uppercase tracking-widest text-white">DamMitra AI (Optimized)</h4>
+        </div>
+        <div className="space-y-6 relative z-10">
+          {metrics.map((m) => {
+            const improvement = m.unplanned - m.optimized;
+            return (
+              <div key={m.label} className="flex items-center justify-between">
+                <span className="text-[10px] font-black text-blue-200 uppercase tracking-widest">{m.label}</span>
+                <div className="text-right">
+                  <div className="text-lg font-display font-black text-white">{m.optimized.toFixed(1)} {m.unit}</div>
+                  {improvement > 0 && (
+                    <div className="text-[9px] font-black text-emerald-300 uppercase tracking-widest">-{improvement.toFixed(1)} {m.unit} Reduced</div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+          <div className="pt-6 border-t border-white/20">
+            <div className="px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest text-center bg-white/20 text-white backdrop-blur-md">
+              Outcome: {optimized.status} (Optimized)
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const ActionCard = ({ action, result, inputs }: { action: SimulationResult['recommendedAction'], result: SimulationResult, inputs: DamInputs }) => {
   const config = {
     'No action required': { icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-100', desc: 'Hydrological conditions are within safe operational parameters. Continue standard monitoring.' },
     'Start gradual release': { icon: AlertCircle, color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-100', desc: 'Pre-emptive controlled release recommended to mitigate upcoming inflow surge.' },
     'Immediate controlled release required': { icon: XCircle, color: 'text-red-600', bg: 'bg-red-50', border: 'border-red-100', desc: 'Critical threshold breach imminent. Activate emergency discharge protocols immediately.' },
   }[action];
 
+  const justifications = [
+    result.peakLevel > 90 ? "Peak reservoir level projected to exceed 90% capacity." : null,
+    result.peakDischarge > inputs.safeDischarge ? `Discharge rate (${result.peakDischarge.toFixed(0)} m³/s) exceeds safe limit.` : null,
+    inputs.rainfall > 100 ? "Extreme precipitation forecast in catchment area." : null,
+    inputs.catchmentWetness > 1.2 ? "Catchment area is saturated, increasing runoff risk." : null,
+    result.floodRiskScore > 70 ? "Flood Risk Index has reached critical levels." : null,
+  ].filter(Boolean);
+
   return (
     <motion.div 
       initial={{ scale: 0.95, opacity: 0 }}
       animate={{ scale: 1, opacity: 1 }}
-      className={cn("p-8 rounded-[2.5rem] border-2 flex items-start gap-6 shadow-xl transition-all duration-500", config.bg, config.border)}
+      className={cn("p-8 rounded-[2.5rem] border-2 flex flex-col sm:flex-row items-start gap-8 shadow-xl transition-all duration-500", config.bg, config.border)}
     >
-      <div className={cn("p-4 rounded-2xl bg-white shadow-lg", config.color)}>
+      <div className={cn("p-4 rounded-2xl bg-white shadow-lg shrink-0", config.color)}>
         <config.icon className="w-10 h-10" />
       </div>
-      <div>
-        <h4 className={cn("text-xl font-display font-black tracking-tight mb-2", config.color)}>{action}</h4>
-        <p className="text-sm font-bold text-slate-600/80 leading-relaxed max-w-md">{config.desc}</p>
+      <div className="space-y-4">
+        <div>
+          <h4 className={cn("text-xl font-display font-black tracking-tight mb-2", config.color)}>{action}</h4>
+          <p className="text-sm font-bold text-slate-600/80 leading-relaxed max-w-md">{config.desc}</p>
+        </div>
+        {justifications.length > 0 && (
+          <div className="pt-4 border-t border-slate-200/50">
+            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3">Justification Matrix</p>
+            <ul className="space-y-2">
+              {justifications.map((j, i) => (
+                <li key={i} className="flex items-center gap-2 text-[11px] font-bold text-slate-600">
+                  <div className={cn("w-1 h-1 rounded-full", config.color.replace('text', 'bg'))} />
+                  {j}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
     </motion.div>
   );
@@ -248,6 +340,10 @@ export default function DamMitraApp() {
 
   useEffect(() => {
     const generateRecommendation = async () => {
+      // Set immediate data-driven fallback based on current simulation
+      const fallback = `Based on current inflow of ${inputs.inflow} m³/s and rainfall of ${inputs.rainfall}mm, a ${optimizedResult.recommendedAction === 'No action required' ? 'stable monitoring' : 'proactive release'} strategy is recommended. Peak level projected at ${optimizedResult.peakLevel.toFixed(1)}%.`;
+      setRecommendation(fallback);
+
       if (!process.env.NEXT_PUBLIC_GEMINI_API_KEY) return;
       setIsGenerating(true);
       try {
@@ -264,9 +360,9 @@ export default function DamMitraApp() {
           Provide a professional, data-driven recommendation in one concise paragraph. Mention specific discharge rates if needed.`,
         });
         const response = await model;
-        setRecommendation(response.text || "Recommendation unavailable.");
+        setRecommendation(response.text || fallback);
       } catch (error) {
-        setRecommendation(`Based on current inflow of ${inputs.inflow} m³/s and rainfall of ${inputs.rainfall}mm, a ${optimizedResult.recommendedAction === 'No action required' ? 'stable monitoring' : 'proactive release'} strategy is recommended. Peak level projected at ${optimizedResult.peakLevel.toFixed(1)}%.`);
+        setRecommendation(fallback);
       } finally {
         setIsGenerating(false);
       }
@@ -551,9 +647,9 @@ export default function DamMitraApp() {
               label="Operational Status" 
               value={optimizedResult.status} 
               icon={ShieldCheck} 
-              colorClass="bg-blue-600 text-white" 
+              colorClass={optimizedResult.status === 'Safe' ? "bg-emerald-600 text-white" : "bg-red-600 text-white"} 
               trend="stable"
-              trendValue="Nominal"
+              trendValue={optimizedResult.status === 'Safe' ? "Nominal" : "Critical"}
               description="Current safety status based on reservoir levels and discharge rates."
             />
             <StatCard 
@@ -562,8 +658,8 @@ export default function DamMitraApp() {
               unit="m³/s" 
               icon={CloudRain} 
               colorClass="bg-cyan-500 text-white" 
-              trend="up"
-              trendValue="+14%"
+              trend={inputs.rainfall > 50 ? "up" : "stable"}
+              trendValue={inputs.rainfall > 50 ? "+14%" : "Steady"}
               description="Estimated total inflow including rainfall runoff and catchment contribution."
             />
             <StatCard 
@@ -571,26 +667,27 @@ export default function DamMitraApp() {
               value={inputs.safeDischarge > 0 ? ((optimizedResult.peakDischarge / inputs.safeDischarge) * 100).toFixed(0) : "0"} 
               unit="%" 
               icon={TrendingUp} 
-              colorClass="bg-indigo-600 text-white" 
-              trend="stable"
-              trendValue="Managed"
+              colorClass={((optimizedResult.peakDischarge / inputs.safeDischarge) * 100) > 100 ? "bg-red-600 text-white" : "bg-indigo-600 text-white"} 
+              trend={((optimizedResult.peakDischarge / inputs.safeDischarge) * 100) > 100 ? "up" : "stable"}
+              trendValue={((optimizedResult.peakDischarge / inputs.safeDischarge) * 100) > 100 ? "High" : "Managed"}
               description="Ratio of peak discharge to the safe operational limit of downstream infrastructure."
             />
             <StatCard 
               label="AI Optimization" 
-              value={unplannedResult.peakDischarge > 0 ? Math.max(0, ((unplannedResult.peakDischarge - optimizedResult.peakDischarge) / unplannedResult.peakDischarge * 100)).toFixed(0) : "0"} 
+              value={unplannedResult.peakDischarge > optimizedResult.peakDischarge ? ((unplannedResult.peakDischarge - optimizedResult.peakDischarge) / unplannedResult.peakDischarge * 100).toFixed(0) : "0"} 
               unit="%" 
               icon={Zap} 
               colorClass="bg-emerald-500 text-white" 
               trend="down"
-              trendValue="-22% Risk"
+              trendValue={unplannedResult.peakDischarge > optimizedResult.peakDischarge ? `-${((unplannedResult.peakDischarge - optimizedResult.peakDischarge) / unplannedResult.peakDischarge * 100).toFixed(0)}% Risk` : "0% Risk"}
               description="Percentage reduction in peak discharge achieved through AI-driven proactive release."
+              loading={isGenerating}
             />
           </div>
 
           {/* Action & Intelligence Section */}
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-10">
-            <ActionCard action={optimizedResult.recommendedAction} />
+            <ActionCard action={optimizedResult.recommendedAction} result={optimizedResult} inputs={inputs} />
             
             <motion.div 
               initial={{ opacity: 0, x: 20 }}
@@ -704,7 +801,16 @@ export default function DamMitraApp() {
           {/* Schedule & Logs */}
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-10">
             <div className="xl:col-span-2">
-              <Card title="Operational Protocol" icon={FileText} subtitle="24-Hour Deployment Schedule">
+              {/* Strategic Comparison Module */}
+          <div className="space-y-6">
+            <div className="flex items-center gap-3 px-4">
+              <div className="p-2 bg-blue-100 rounded-lg"><Activity className="w-4 h-4 text-blue-600" /></div>
+              <h3 className="font-display font-black text-sm uppercase tracking-[0.3em] text-slate-800">Strategic Scenario Analysis</h3>
+            </div>
+            <ComparisonModule unplanned={unplannedResult} optimized={optimizedResult} safeLimit={inputs.safeDischarge} />
+          </div>
+
+          <Card title="Operational Protocol" icon={FileText} subtitle="24-Hour Deployment Schedule">
                 <div className="overflow-x-auto">
                   <table className="w-full text-left">
                     <thead>
