@@ -78,7 +78,7 @@ const Card = ({ children, className, title, icon: Icon, subtitle }: { children: 
   </motion.div>
 );
 
-const StatCard = ({ label, value, unit, icon: Icon, colorClass, trend, trendValue }: { label: string, value: string | number, unit?: string, icon: any, colorClass: string, trend?: 'up' | 'down' | 'stable', trendValue?: string }) => (
+const StatCard = ({ label, value, unit, icon: Icon, colorClass, trend, trendValue, description }: { label: string, value: string | number, unit?: string, icon: any, colorClass: string, trend?: 'up' | 'down' | 'stable', trendValue?: string, description?: string }) => (
   <motion.div 
     whileHover={{ y: -8, scale: 1.02 }}
     className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-xl shadow-slate-200/50 flex flex-col gap-6 relative overflow-hidden group transition-all duration-500"
@@ -105,6 +105,7 @@ const StatCard = ({ label, value, unit, icon: Icon, colorClass, trend, trendValu
         <span className="text-4xl font-display font-black text-slate-900 tracking-tighter">{value}</span>
         {unit && <span className="text-sm font-black text-slate-400 uppercase tracking-widest">{unit}</span>}
       </div>
+      {description && <p className="text-[10px] font-bold text-slate-400 mt-3 leading-relaxed">{description}</p>}
     </div>
   </motion.div>
 );
@@ -214,6 +215,16 @@ export default function DamMitraApp() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [activeTab, setActiveTab] = useState<'level' | 'discharge'>('level');
   const [systemHealth, setSystemHealth] = useState(98);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setSystemHealth(prev => {
+        const change = (Math.random() - 0.5) * 2;
+        return Math.min(100, Math.max(95, prev + change));
+      });
+    }, 3000);
+    return () => clearInterval(interval);
+  }, []);
 
   const unplannedResult = useMemo(() => calculateSimulation(inputs, false), [inputs]);
   const optimizedResult = useMemo(() => calculateSimulation(inputs, true), [inputs]);
@@ -397,6 +408,28 @@ export default function DamMitraApp() {
                   name="inflow" 
                   value={inputs.inflow} 
                   onChange={handleInputChange} 
+                  min="0"
+                />
+                <InputField 
+                  label="Outflow (m³/s)" 
+                  icon={Wind} 
+                  type="number" 
+                  name="outflow" 
+                  value={inputs.outflow} 
+                  onChange={handleInputChange} 
+                  min="0"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-6">
+                <InputField 
+                  label="Capacity (Mm³)" 
+                  icon={Database} 
+                  type="number" 
+                  name="capacity" 
+                  value={inputs.capacity} 
+                  onChange={handleInputChange} 
+                  min="1"
                 />
                 <InputField 
                   label="Safe Limit" 
@@ -405,8 +438,20 @@ export default function DamMitraApp() {
                   name="safeDischarge" 
                   value={inputs.safeDischarge} 
                   onChange={handleInputChange} 
+                  min="1"
                 />
               </div>
+
+              <InputField 
+                label="Forecast Horizon (Hours)" 
+                icon={History} 
+                type="number" 
+                name="forecastHorizon" 
+                value={inputs.forecastHorizon} 
+                onChange={handleInputChange} 
+                min="1"
+                max="168"
+              />
 
               <div className="space-y-3">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-1 flex items-center gap-2">
@@ -434,8 +479,24 @@ export default function DamMitraApp() {
                 </div>
               </div>
 
-              <div className="pt-8 border-t border-slate-100/50">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-5 px-1">Rapid Deployment Scenarios</p>
+              <div className="pt-8 border-t border-slate-100/50 flex flex-col gap-4">
+                <button 
+                  onClick={() => setInputs({
+                    reservoirName: "Bhakra Nangal Dam",
+                    currentLevel: 72,
+                    inflow: 550,
+                    outflow: 400,
+                    rainfall: 45,
+                    catchmentWetness: 1.0,
+                    safeDischarge: 1500,
+                    capacity: 9340,
+                    forecastHorizon: 24,
+                  })}
+                  className="w-full py-4 rounded-2xl bg-slate-100 text-slate-600 text-[10px] font-black uppercase tracking-widest hover:bg-slate-200 transition-all"
+                >
+                  Reset Parameters
+                </button>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1 px-1">Rapid Deployment Scenarios</p>
                 <div className="flex flex-col gap-4">
                   <button onClick={() => applyPreset('moderate')} className="group flex items-center justify-between p-5 rounded-3xl bg-emerald-50/40 border border-emerald-100/50 hover:bg-emerald-50 hover:scale-[1.02] transition-all duration-300">
                     <div className="flex items-center gap-4">
@@ -493,6 +554,7 @@ export default function DamMitraApp() {
               colorClass="bg-blue-600 text-white" 
               trend="stable"
               trendValue="Nominal"
+              description="Current safety status based on reservoir levels and discharge rates."
             />
             <StatCard 
               label="Predicted Inflow" 
@@ -502,24 +564,27 @@ export default function DamMitraApp() {
               colorClass="bg-cyan-500 text-white" 
               trend="up"
               trendValue="+14%"
+              description="Estimated total inflow including rainfall runoff and catchment contribution."
             />
             <StatCard 
               label="Downstream Stress" 
-              value={((optimizedResult.peakDischarge / inputs.safeDischarge) * 100).toFixed(0)} 
+              value={inputs.safeDischarge > 0 ? ((optimizedResult.peakDischarge / inputs.safeDischarge) * 100).toFixed(0) : "0"} 
               unit="%" 
               icon={TrendingUp} 
               colorClass="bg-indigo-600 text-white" 
               trend="stable"
               trendValue="Managed"
+              description="Ratio of peak discharge to the safe operational limit of downstream infrastructure."
             />
             <StatCard 
               label="AI Optimization" 
-              value={Math.max(0, ((unplannedResult.peakDischarge - optimizedResult.peakDischarge) / unplannedResult.peakDischarge * 100)).toFixed(0)} 
+              value={unplannedResult.peakDischarge > 0 ? Math.max(0, ((unplannedResult.peakDischarge - optimizedResult.peakDischarge) / unplannedResult.peakDischarge * 100)).toFixed(0) : "0"} 
               unit="%" 
               icon={Zap} 
               colorClass="bg-emerald-500 text-white" 
               trend="down"
               trendValue="-22% Risk"
+              description="Percentage reduction in peak discharge achieved through AI-driven proactive release."
             />
           </div>
 
@@ -653,12 +718,22 @@ export default function DamMitraApp() {
                     </thead>
                     <tbody className="divide-y divide-slate-50">
                       {optimizedResult.steps.filter((_, i) => i % 4 === 0).map((step) => (
-                        <tr key={step.hour} className="group hover:bg-slate-50/50 transition-all duration-300">
-                          <td className="py-6 text-sm font-black text-slate-900 tracking-tight">T+{step.hour}h</td>
-                          <td className="py-6 text-sm font-bold text-slate-500">{step.inflow.toFixed(0)}</td>
-                          <td className="py-6 text-sm font-black text-blue-600">{step.outflow.toFixed(0)} <span className="text-[9px] font-bold text-blue-400">m³/s</span></td>
-                          <td className="py-6 text-sm font-bold text-slate-500">{step.level.toFixed(1)}%</td>
-                          <td className="py-6">
+                        <tr key={step.hour} className="group hover:bg-blue-50/50 transition-all duration-300">
+                          <td className="py-6 px-4 text-sm font-black text-slate-900 tracking-tight group-hover:text-blue-600">T+{step.hour}h</td>
+                          <td className="py-6 px-4 text-sm font-bold text-slate-500">{step.inflow.toFixed(0)}</td>
+                          <td className="py-6 px-4 text-sm font-black text-blue-600">{step.outflow.toFixed(0)} <span className="text-[9px] font-bold text-blue-400">m³/s</span></td>
+                          <td className="py-6 px-4 text-sm font-bold text-slate-500">
+                            <div className="flex items-center gap-2">
+                              <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                <div 
+                                  className={cn("h-full rounded-full", step.level > 90 ? "bg-red-500" : step.level > 75 ? "bg-amber-500" : "bg-emerald-500")}
+                                  style={{ width: `${Math.min(100, step.level)}%` }}
+                                />
+                              </div>
+                              {step.level.toFixed(1)}%
+                            </div>
+                          </td>
+                          <td className="py-6 px-4">
                             <div className={cn("inline-flex items-center gap-2.5 px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border shadow-sm", 
                               step.downstreamStress > 100 ? "bg-red-50 text-red-600 border-red-100" : "bg-emerald-50 text-emerald-600 border-emerald-100"
                             )}>
@@ -727,13 +802,20 @@ export default function DamMitraApp() {
                   <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 flex flex-col items-center gap-2">
                     <Cpu className="w-5 h-5 text-slate-400" />
                     <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">CPU Load</span>
-                    <span className="text-sm font-black text-slate-800">12.4%</span>
+                    <span className="text-sm font-black text-slate-800">{(100 - systemHealth + 10).toFixed(1)}%</span>
                   </div>
                   <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 flex flex-col items-center gap-2">
                     <Database className="w-5 h-5 text-slate-400" />
-                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Memory</span>
-                    <span className="text-sm font-black text-slate-800">2.8 GB</span>
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">System Integrity</span>
+                    <span className="text-sm font-black text-emerald-600">{systemHealth.toFixed(1)}%</span>
                   </div>
+                </div>
+                <div className="mt-6 p-4 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                    <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Simulation Time</span>
+                  </div>
+                  <span className="text-xs font-black text-blue-700">0.42ms</span>
                 </div>
               </Card>
             </div>
